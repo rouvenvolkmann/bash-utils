@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Usage: wkt_transform WKT_STRING S_SRS T_SRS
+# Depends: ogr2ogr
+
+test $# -eq 3 || { >&2 echo -e "Usage: wkt_transform WKT_STRING S_SRS T_SRS"; return 1; }
+tmpcsv=$(mktemp -u).csv
+echo -e "id,WKT\n1,\"${1}\"" > $tmpcsv
+ogr2ogr -f CSV -s_srs $2 -t_srs $3 /vsistdout/ $tmpcsv \
+    -oo GEOM_POSSIBLE_NAMES=WKT -oo KEEP_GEOM_COLUMNS=false -lco GEOMETRY=AS_WKT \
+    | grep --color=never -Po '(?<=^")[^"]*'
+rm $tmpcsv
