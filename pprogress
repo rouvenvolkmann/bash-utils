@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Usage: pprogress count_cmd end_val [sleep_time=10]
+# e.g. pprogress "ls | wc -l" 806 10
+
+count_cmd="$1";
+end_val=$2;
+sleep_time=$3;
+test -z $sleep_time && sleep_time=10;
+START_TIME=$(date +%s);
+first=$(eval $count_cmd);
+while true; do
+    current=$(eval $count_cmd);
+    DURATION=$(bc<<<"$(date +%s)-${START_TIME}");
+    test $(bc<<<"$DURATION > 0") -eq 1 \
+        && SPEED=$(awk 'BEGIN { printf "%s", ('${current}'-'${first}')/'${DURATION}' }') \
+        || SPEED=0
+    if [ $(bc<<<"$SPEED != 0") -eq 1 ]; then
+        ETE=$(awk 'BEGIN { printf "%s", ('${end_val}'-'${current}')/'${SPEED}' }');
+        if [ $(bc<<<"$ETE > 7200") -eq 1 ]; then
+            ETE=$(awk 'BEGIN { printf "%dh", '${ETE}/3600' }');
+        elif [ $(bc<<<"$ETE > 120") -eq 1 ]; then
+            ETE=$(awk 'BEGIN { printf "%dmin", '${ETE}/60' }');
+        else
+            ETE=$(printf "%ds" "${ETE}")
+        fi
+    else
+        ETE="N/A"
+    fi
+    awk 'BEGIN { printf "\033[2KDone: %s (%.1f%), Speed: %.3f/s, ETE: %s\r", '$current', '$current'/'$end_val'*100, '${SPEED}', "'${ETE}'" }';
+    sleep $sleep_time;
+done;
