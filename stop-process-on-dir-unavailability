@@ -1,0 +1,82 @@
+#!/bin/bash
+
+set -eu -o pipefail
+
+########################################################################
+#
+# This script will check a directory for availability.
+# If the check is negative, it will try to stop a specified process.
+# If stop didn't work, it will hard kill the process.
+# 
+########################################################################
+
+# The DIR which should be checked for existance
+DIR='/'
+
+# Unique process name as found by pgrep -f
+PROCESS_NAME='processname'
+
+# Number of retries to check for $DIR
+NUM_RETRIES=1
+
+# Time to wait between retries (seconds)
+RETRY_WAIT_TIME=60
+
+# Command to soft stop the script (Default: 'pkill -15 -f "$PROCESS_NAME"')
+# If left empty, process will be killed immediately
+STOP_COMMAND='pkill -15 -f "$PROCESS_NAME"'
+
+# Time to wait after issuing stop command before pkill -9
+STOP_WAIT_TIME=120
+
+########################################################################
+
+log() {
+    echo "[$(date +%F-%H:%M:%S)] $1"
+}
+check_dir_available() {
+    local DIR="$1"
+    ls "${DIR}" &>/dev/null;
+    if [ $? -eq 0 ]; then
+        log "${DIR} is available."
+        return 0;
+    else
+        log "${DIR} is unavailable."
+        return 1
+    fi
+}
+
+pgrep -f "${PROCESS_NAME}" >/dev/null || { log "${PROCESS_NAME} is not started, doing nothing."; exit; }
+
+for i in $(seq 0 $NUM_RETRIES); do
+
+    if check_dir_available "${DIR}"; then
+        log "Doing nothing."
+        exit
+    fi
+    
+    if [ $i -lt $NUM_RETRIES ]; then
+        log "Trying again in 60 seconds ..."
+        for i in $(seq $RETRY_WAIT_TIME); do
+            sleep 1
+            echo -n "."
+        done
+    fi
+    
+done
+
+if [ -v STOP_COMMAND ] && [ -n "${STOP_COMMAND}" ]; then
+    log "Trying to stop ${PROCESS_NAME} ..."
+    ${STOP_COMMAND}
+    log "Waiting 120 seconds for ${PROCESS_NAME} to have stopped ..."
+                
+    for i in $(seq $STOP_WAIT_TIME); do
+        sleep 1
+        pgrep -f "${PROCESS_NAME}" || { log "Successfully stopped ${PROCESS_NAME}."; exit; }
+        echo -n "."
+    done
+    log "${PROCESS_NAME} did not stop in time."
+fi
+
+pkill -9 -f "${PROCESS_NAME}"
+log "Killed ${PROCESS_NAME}."
